@@ -10,28 +10,20 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.Html
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.toRequestBody
-import androidx.activity.viewModels
 import io.heckel.ntfy.BuildConfig
 import io.heckel.ntfy.R
 import io.heckel.ntfy.app.Application
@@ -72,41 +64,9 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
     private lateinit var mainList: RecyclerView
     private lateinit var mainListContainer: SwipeRefreshLayout
     private lateinit var menu: Menu
-    
-    // Message input UI elements
-    private lateinit var messageInputContainer: View
-    private lateinit var priorityLayout: TextInputLayout
-    private lateinit var priorityText: AutoCompleteTextView
-    private lateinit var titleInputLayout: TextInputLayout
-    private lateinit var titleInput: TextInputEditText
-    private lateinit var tagsInputLayout: TextInputLayout
-    private lateinit var tagsInput: TextInputEditText
-    private lateinit var attachFileButton: MaterialButton
-    private lateinit var markdownToggleButton: MaterialButton
-    private lateinit var messageInputLayout: TextInputLayout
-    private lateinit var messageInput: TextInputEditText
-    private lateinit var sendButton: FloatingActionButton
-    private lateinit var attachmentInfo: View
-    private lateinit var attachmentInfoText: TextView
-    private lateinit var attachmentRemoveButton: ImageButton
-    private lateinit var markdownPreview: View
-    private lateinit var markdownPreviewText: TextView
-    
-    // Message input state
-    private var selectedPriority: Int = PRIORITY_DEFAULT
-    private var selectedAttachmentUri: Uri? = null
-    private var isMarkdownMode: Boolean = false
-    private var selectedTags: MutableList<String> = mutableListOf()
 
     // Action mode stuff
     private var actionMode: ActionMode? = null
-    
-    // File picker
-    private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            onAttachmentSelected(uri)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -304,9 +264,6 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
         } catch (_: Exception) {
             // Ignore errors
         }
-
-        // Initialize message input UI
-        initializeMessageInput()
     }
 
     override fun onResume() {
@@ -808,408 +765,11 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
         fadeStatusBarColor(window, fromColor, toColor)
     }
 
-    /**
-     * Initialize the message input UI components and set up event listeners
-     */
-    private fun initializeMessageInput() {
-        // Get UI element references
-        messageInputContainer = findViewById(R.id.detail_message_input_container)
-        priorityLayout = findViewById(R.id.detail_priority_layout)
-        priorityText = findViewById(R.id.detail_priority_text)
-        titleInputLayout = findViewById(R.id.detail_title_input_layout)
-        titleInput = findViewById(R.id.detail_title_input)
-        tagsInputLayout = findViewById(R.id.detail_tags_input_layout)
-        tagsInput = findViewById(R.id.detail_tags_input)
-        attachFileButton = findViewById(R.id.detail_attach_file_button)
-        markdownToggleButton = findViewById(R.id.detail_markdown_toggle_button)
-        messageInputLayout = findViewById(R.id.detail_message_input_layout)
-        messageInput = findViewById(R.id.detail_message_input)
-        sendButton = findViewById(R.id.detail_send_button)
-        attachmentInfo = findViewById(R.id.detail_attachment_info)
-        attachmentInfoText = findViewById(R.id.detail_attachment_info_text)
-        attachmentRemoveButton = findViewById(R.id.detail_attachment_remove)
-        markdownPreview = findViewById(R.id.detail_markdown_preview)
-        markdownPreviewText = findViewById(R.id.detail_markdown_preview_text)
-
-        // Setup priority dropdown
-        setupPriorityDropdown()
-
-        // Setup click listeners
-        attachFileButton.setOnClickListener { onAttachFileClick() }
-        markdownToggleButton.setOnClickListener { onMarkdownToggleClick() }
-        sendButton.setOnClickListener { onSendMessageClick() }
-        attachmentRemoveButton.setOnClickListener { onRemoveAttachmentClick() }
-        
-        // Setup tags picker
-        tagsInputLayout.setEndIconOnClickListener { onTagsPickerClick() }
-        tagsInput.setOnClickListener { onTagsPickerClick() }
-        
-        // Setup IME action for send
-        messageInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
-                onSendMessageClick()
-                true
-            } else {
-                false
-            }
-        }
-
-        // Setup text watcher for message validation and preview
-        messageInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                validateMessage()
-                if (isMarkdownMode) {
-                    updateMarkdownPreview()
-                }
-            }
-        })
-    }
-
-    /**
-     * Setup the priority selection dropdown with available options
-     */
-    private fun setupPriorityDropdown() {
-        val priorityOptions = listOf(
-            getString(R.string.detail_send_priority_low) to PRIORITY_LOW,
-            getString(R.string.detail_send_priority_default) to PRIORITY_DEFAULT,
-            getString(R.string.detail_send_priority_high) to PRIORITY_HIGH,
-            getString(R.string.detail_send_priority_max) to PRIORITY_MAX
-        )
-
-        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, priorityOptions.map { it.first })
-        priorityText.setAdapter(adapter)
-        
-        // Set default selection
-        priorityText.setText(priorityOptions.find { it.second == selectedPriority }?.first, false)
-
-        priorityText.setOnItemClickListener { _, _, position, _ ->
-            selectedPriority = priorityOptions[position].second
-        }
-    }
-
-    /**
-     * Handle attachment file selection click
-     */
-    private fun onAttachFileClick() {
-        filePickerLauncher.launch("*/*")
-    }
-
-    /**
-     * Handle attachment selection from file picker
-     * 
-     * Processes the selected file URI and displays file information.
-     * Supports all file types through the generic wildcard mime type filter.
-     */
-    private fun onAttachmentSelected(uri: Uri) {
-        try {
-            val stat = fileStat(this, uri)
-            selectedAttachmentUri = uri
-            
-            // Display file information to user
-            val fileInfo = getString(R.string.detail_send_file_chosen, stat.filename, formatBytes(stat.size))
-            attachmentInfoText.text = fileInfo
-            attachmentInfo.visibility = View.VISIBLE
-        } catch (e: Exception) {
-            Log.w(TAG, "Unable to get file info for selected attachment", e)
-            Toast.makeText(this, getString(R.string.detail_send_error, e.message), Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /**
-     * Handle removing the selected attachment
-     */
-    private fun onRemoveAttachmentClick() {
-        selectedAttachmentUri = null
-        attachmentInfo.visibility = View.GONE
-    }
-
-    /**
-     * Toggle markdown mode and preview
-     */
-    private fun onMarkdownToggleClick() {
-        isMarkdownMode = !isMarkdownMode
-        
-        // Update button appearance
-        markdownToggleButton.isSelected = isMarkdownMode
-        
-        // Show/hide markdown preview
-        if (isMarkdownMode) {
-            markdownPreview.visibility = View.VISIBLE
-            updateMarkdownPreview()
-        } else {
-            markdownPreview.visibility = View.GONE
-        }
-    }
-
-    /**
-     * Update the markdown preview with current message content
-     */
-    private fun updateMarkdownPreview() {
-        val message = messageInput.text?.toString() ?: ""
-        if (message.isNotEmpty()) {
-            // Simple markdown preview without external library
-            // For now, just show the raw text with basic formatting hints
-            markdownPreviewText.text = "Preview: $message"
-        } else {
-            markdownPreviewText.text = getString(R.string.detail_send_markdown_preview)
-        }
-    }
-
-    /**
-     * Validate message content and update UI state accordingly
-     * 
-     * This function performs real-time validation of:
-     * - Message emptiness (empty messages cannot be sent)
-     * - UTF-8 byte size validation against 4KB limit
-     * - UI state updates (error messages, send button state)
-     */
-    private fun validateMessage() {
-        val message = messageInput.text?.toString() ?: ""
-        val messageBytes = message.toByteArray(Charsets.UTF_8)
-        val isValid = message.isNotEmpty()
-        
-        // Enable/disable send button based on message validity
-        sendButton.isEnabled = isValid
-        
-        // Show error message if message exceeds 4KB limit
-        if (messageBytes.size > MESSAGE_SIZE_LIMIT) {
-            messageInputLayout.error = getString(R.string.detail_send_error_too_large)
-        } else {
-            messageInputLayout.error = null
-        }
-    }
-
-    /**
-     * Handle sending the message
-     */
-    private fun onSendMessageClick() {
-        val message = messageInput.text?.toString() ?: ""
-        
-        if (message.isEmpty()) {
-            Toast.makeText(this, getString(R.string.detail_send_error_empty), Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        sendMessage(message)
-    }
-
-    /**
-     * Send the message with current settings and handle size validation
-     * 
-     * This function implements the core message sending logic with the following features:
-     * - UTF-8 validation and encoding
-     * - 4KB message size limit enforcement
-     * - File attachment support
-     * - Priority selection
-     * - Robust error handling
-     * 
-     * If a message exceeds 4KB, it's automatically converted to a .txt file attachment
-     * to ensure delivery while informing the user about the size limit.
-     */
-    private fun sendMessage(message: String) {
-        Log.d(TAG, "Sending message to ${topicShortUrl(subscriptionBaseUrl, subscriptionTopic)}")
-
-        // Disable send button and show loading state to prevent double-sends
-        sendButton.isEnabled = false
-        messageInput.isEnabled = false
-        
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val user = repository.getUser(subscriptionBaseUrl) // May be null for anonymous publishing
-                val messageBytes = message.toByteArray(Charsets.UTF_8)
-                
-                // Handle message size validation and file attachment logic
-                val (actualMessage, filename, body) = when {
-                    messageBytes.size > MESSAGE_SIZE_LIMIT -> {
-                        // Message exceeds 4KB limit, send as .txt file attachment
-                        val txtContent = message.toRequestBody("text/plain".toMediaTypeOrNull())
-                        Triple("Message sent as .txt file due to size limit", "message.txt", txtContent)
-                    }
-                    selectedAttachmentUri != null -> {
-                        // Regular message with user-selected file attachment
-                        val stat = fileStat(this@DetailActivity, selectedAttachmentUri)
-                        val body = ContentUriRequestBody(applicationContext.contentResolver, selectedAttachmentUri!!, stat.size)
-                        Triple(message, stat.filename, body)
-                    }
-                    else -> {
-                        // Regular text-only message
-                        Triple(message, "", null)
-                    }
-                }
-
-                // Get title and tags from input fields
-                val title = titleInput.text?.toString()?.trim() ?: ""
-                val tagsText = tagsInput.text?.toString()?.trim() ?: ""
-                val tags = if (tagsText.isNotEmpty()) {
-                    tagsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                } else {
-                    emptyList()
-                }
-
-                // Publish message using ntfy API
-                api.publish(
-                    baseUrl = subscriptionBaseUrl,
-                    topic = subscriptionTopic,
-                    user = user,
-                    message = actualMessage,
-                    title = title,
-                    priority = selectedPriority,
-                    tags = tags,
-                    delay = "",
-                    body = body,
-                    filename = filename
-                )
-
-                runOnUiThread {
-                    // Reset UI state after successful send
-                    resetMessageInput()
-                    
-                    // Show appropriate success feedback
-                    val successMessage = if (messageBytes.size > MESSAGE_SIZE_LIMIT) {
-                        getString(R.string.detail_send_error_too_large)
-                    } else {
-                        getString(R.string.detail_send_success)
-                    }
-                    Toast.makeText(this@DetailActivity, successMessage, 
-                        if (messageBytes.size > MESSAGE_SIZE_LIMIT) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                // Handle various error types with appropriate user feedback
-                val errorMessage = when (e) {
-                    is ApiService.UnauthorizedException -> {
-                        if (e.user != null) {
-                            getString(R.string.detail_test_message_error_unauthorized_user, e.user.username)
-                        } else {
-                            getString(R.string.detail_test_message_error_unauthorized_anon)
-                        }
-                    }
-                    is ApiService.EntityTooLargeException -> {
-                        getString(R.string.detail_test_message_error_too_large)
-                    }
-                    else -> {
-                        getString(R.string.detail_send_error, e.message)
-                    }
-                }
-                
-                runOnUiThread {
-                    // Re-enable input controls on error
-                    sendButton.isEnabled = true  
-                    messageInput.isEnabled = true
-                    
-                    Toast.makeText(this@DetailActivity, errorMessage, Toast.LENGTH_LONG).show()
-                }
-            }
-        }
-    }
-
-    /**
-     * Reset the message input UI to its initial state after sending a message
-     */
-    private fun resetMessageInput() {
-        // Clear text inputs
-        titleInput.text?.clear()
-        tagsInput.text?.clear()
-        messageInput.text?.clear()
-        selectedTags.clear()
-        
-        // Remove attachment
-        selectedAttachmentUri = null
-        attachmentInfo.visibility = View.GONE
-        
-        // Reset markdown mode
-        isMarkdownMode = false
-        markdownToggleButton.isSelected = false
-        markdownPreview.visibility = View.GONE
-        
-        // Re-enable input controls
-        sendButton.isEnabled = true
-        messageInput.isEnabled = true
-    }
-
-    /**
-     * Show tags picker dialog with common tags and custom input
-     */
-    private fun onTagsPickerClick() {
-        // Common ntfy emoji and text tags for demonstration
-        val commonTags = listOf(
-            "warning" to "⚠️",
-            "fire" to "🔥",
-            "success" to "✅",
-            "error" to "❌",
-            "info" to "ℹ️",
-            "urgent" to "🚨",
-            "skull" to "💀",
-            "backup" to "💾",
-            "computer" to "💻",
-            "mobile" to "📱",
-            "email" to "📧",
-            "lock" to "🔒",
-            "key" to "🔑",
-            "home" to "🏠",
-            "work" to "🏢",
-            "construction" to "🚧",
-            "checkmark" to "✓",
-            "x" to "✗",
-            "thumbs_up" to "👍",
-            "thumbs_down" to "👎"
-        )
-
-        // Create a simple list dialog showing tag names and their emoji representations
-        val tagItems = commonTags.map { "${it.first} ${it.second}" }.toTypedArray()
-        
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.detail_send_tags_dialog_title))
-            .setItems(tagItems) { _, which ->
-                val selectedTag = commonTags[which].first
-                // Add to existing tags
-                val currentTags = tagsInput.text?.toString()?.trim() ?: ""
-                val updatedTags = if (currentTags.isEmpty()) {
-                    selectedTag
-                } else {
-                    "$currentTags, $selectedTag"
-                }
-                tagsInput.setText(updatedTags)
-            }
-            .setNeutralButton("Custom Tags") { _, _ ->
-                showCustomTagsDialog()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-    
-    /**
-     * Show custom tags input dialog
-     */
-    private fun showCustomTagsDialog() {
-        val input = TextInputEditText(this)
-        input.setText(tagsInput.text)
-        input.hint = getString(R.string.detail_send_tags_custom_hint)
-        
-        val container = LinearLayout(this)
-        container.setPadding(50, 20, 50, 20)
-        container.addView(input)
-        
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.detail_send_tags_dialog_title))
-            .setMessage(getString(R.string.detail_send_tags_dialog_hint))
-            .setView(container)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                tagsInput.setText(input.text)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
     companion object {
         const val TAG = "NtfyDetailActivity"
         const val EXTRA_SUBSCRIPTION_ID = "subscriptionId"
         const val EXTRA_SUBSCRIPTION_BASE_URL = "baseUrl"
         const val EXTRA_SUBSCRIPTION_TOPIC = "topic"
         const val EXTRA_SUBSCRIPTION_DISPLAY_NAME = "displayName"
-        
-        // Message size limit (4KB)
-        const val MESSAGE_SIZE_LIMIT = 4096
     }
 }

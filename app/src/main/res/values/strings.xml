@@ -175,31 +175,6 @@
     <string name="detail_item_download_info_download_failed_expired">download failed, link expired</string>
     <string name="detail_item_download_info_download_failed_expires_x">download failed, link expires %1$s</string>
 
-    <!-- Detail send message strings -->
-    <string name="detail_send_priority_hint">Priority</string>
-    <string name="detail_send_title_hint">Title (optional)</string>
-    <string name="detail_send_tags_hint">Tags (optional)</string>
-    <string name="detail_send_tags_helper">Tap icon to choose from available tags</string>
-    <string name="detail_send_tags_picker">Choose tags</string>
-    <string name="detail_send_message_hint">Type your message…</string>
-    <string name="detail_send_button_desc">Send message</string>
-    <string name="detail_send_attach_file">Attach file</string>
-    <string name="detail_send_markdown_toggle">Toggle markdown</string>
-    <string name="detail_send_remove_attachment">Remove attachment</string>
-    <string name="detail_send_priority_low">Low</string>
-    <string name="detail_send_priority_default">Default</string>
-    <string name="detail_send_priority_high">High</string>
-    <string name="detail_send_priority_max">Max</string>
-    <string name="detail_send_success">Message sent successfully</string>
-    <string name="detail_send_error">Cannot send message: %1$s</string>
-    <string name="detail_send_error_empty">Message cannot be empty</string>
-    <string name="detail_send_error_too_large">Message exceeds 4096 bytes, sent as .txt file</string>
-    <string name="detail_send_file_chosen">File: %1$s (%2$s)</string>
-    <string name="detail_send_markdown_preview">Markdown Preview</string>
-    <string name="detail_send_tags_dialog_title">Choose Tags</string>
-    <string name="detail_send_tags_dialog_hint">Select tags or enter custom tags separated by commas</string>
-    <string name="detail_send_tags_custom_hint">Custom tags (comma-separated)</string>
-
     <!-- Detail activity: Action bar -->
     <string name="detail_menu_notifications_enabled">Notifications on</string>
     <string name="detail_menu_notifications_disabled_forever">Notifications muted</string>
