@@ -832,9 +832,13 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
         attachmentRemoveButton.setOnClickListener { onRemoveAttachmentClick() }
         
         // Setup IME action for send
-        messageInput.setOnEditorActionListener { _, _, _ ->
-            onSendMessageClick()
-            true
+        messageInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                onSendMessageClick()
+                true
+            } else {
+                false
+            }
         }
 
         // Setup text watcher for message validation and preview
@@ -881,12 +885,16 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
 
     /**
      * Handle attachment selection from file picker
+     * 
+     * Processes the selected file URI and displays file information.
+     * Supports all file types through the generic "*/*" mime type filter.
      */
     private fun onAttachmentSelected(uri: Uri) {
         try {
             val stat = fileStat(this, uri)
             selectedAttachmentUri = uri
             
+            // Display file information to user
             val fileInfo = getString(R.string.detail_send_file_chosen, stat.filename, formatBytes(stat.size))
             attachmentInfoText.text = fileInfo
             attachmentInfo.visibility = View.VISIBLE
@@ -937,16 +945,22 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
     }
 
     /**
-     * Validate message content and update UI accordingly
+     * Validate message content and update UI state accordingly
+     * 
+     * This function performs real-time validation of:
+     * - Message emptiness (empty messages cannot be sent)
+     * - UTF-8 byte size validation against 4KB limit
+     * - UI state updates (error messages, send button state)
      */
     private fun validateMessage() {
         val message = messageInput.text?.toString() ?: ""
         val messageBytes = message.toByteArray(Charsets.UTF_8)
         val isValid = message.isNotEmpty()
         
+        // Enable/disable send button based on message validity
         sendButton.isEnabled = isValid
         
-        // Update character counter color if approaching or exceeding limit
+        // Show error message if message exceeds 4KB limit
         if (messageBytes.size > MESSAGE_SIZE_LIMIT) {
             messageInputLayout.error = getString(R.string.detail_send_error_too_large)
         } else {
@@ -969,72 +983,78 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
     }
 
     /**
-     * Send the message with current settings
+     * Send the message with current settings and handle size validation
+     * 
+     * This function implements the core message sending logic with the following features:
+     * - UTF-8 validation and encoding
+     * - 4KB message size limit enforcement
+     * - File attachment support
+     * - Priority selection
+     * - Robust error handling
+     * 
+     * If a message exceeds 4KB, it's automatically converted to a .txt file attachment
+     * to ensure delivery while informing the user about the size limit.
      */
     private fun sendMessage(message: String) {
         Log.d(TAG, "Sending message to ${topicShortUrl(subscriptionBaseUrl, subscriptionTopic)}")
 
-        // Disable send button and show loading state
+        // Disable send button and show loading state to prevent double-sends
         sendButton.isEnabled = false
         messageInput.isEnabled = false
         
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val user = repository.getUser(subscriptionBaseUrl) // May be null
+                val user = repository.getUser(subscriptionBaseUrl) // May be null for anonymous publishing
                 val messageBytes = message.toByteArray(Charsets.UTF_8)
                 
-                val (actualMessage, filename, body) = if (messageBytes.size > MESSAGE_SIZE_LIMIT) {
-                    // Message exceeds limit, send as file attachment
-                    val txtContent = message.toRequestBody("text/plain".toMediaTypeOrNull())
-                    Triple("Message sent as .txt file due to size limit", "message.txt", txtContent)
-                } else if (selectedAttachmentUri != null) {
-                    // Regular message with file attachment
-                    val stat = fileStat(this@DetailActivity, selectedAttachmentUri)
-                    val body = ContentUriRequestBody(applicationContext.contentResolver, selectedAttachmentUri!!, stat.size)
-                    Triple(message, stat.filename, body)
-                } else {
-                    // Regular text message
-                    Triple(message, "", null)
+                // Handle message size validation and file attachment logic
+                val (actualMessage, filename, body) = when {
+                    messageBytes.size > MESSAGE_SIZE_LIMIT -> {
+                        // Message exceeds 4KB limit, send as .txt file attachment
+                        val txtContent = message.toRequestBody("text/plain".toMediaTypeOrNull())
+                        Triple("Message sent as .txt file due to size limit", "message.txt", txtContent)
+                    }
+                    selectedAttachmentUri != null -> {
+                        // Regular message with user-selected file attachment
+                        val stat = fileStat(this@DetailActivity, selectedAttachmentUri)
+                        val body = ContentUriRequestBody(applicationContext.contentResolver, selectedAttachmentUri!!, stat.size)
+                        Triple(message, stat.filename, body)
+                    }
+                    else -> {
+                        // Regular text-only message
+                        Triple(message, "", null)
+                    }
                 }
 
+                // Publish message using ntfy API
                 api.publish(
                     baseUrl = subscriptionBaseUrl,
                     topic = subscriptionTopic,
                     user = user,
                     message = actualMessage,
-                    title = "", // We don't have title input in this implementation
+                    title = "", // No title input in current implementation
                     priority = selectedPriority,
-                    tags = emptyList(), // We don't have tag input in this implementation
+                    tags = emptyList(), // No tag input in current implementation  
                     delay = "",
                     body = body,
                     filename = filename
                 )
 
                 runOnUiThread {
-                    // Clear the input and reset state
-                    messageInput.text?.clear()
-                    selectedAttachmentUri = null
-                    attachmentInfo.visibility = View.GONE
-                    isMarkdownMode = false
-                    markdownToggleButton.isSelected = false
-                    markdownPreview.visibility = View.GONE
+                    // Reset UI state after successful send
+                    resetMessageInput()
                     
-                    // Re-enable input
-                    sendButton.isEnabled = true
-                    messageInput.isEnabled = true
-                    
-                    // Show success message
-                    if (messageBytes.size > MESSAGE_SIZE_LIMIT) {
-                        Toast.makeText(this@DetailActivity, 
-                            getString(R.string.detail_send_error_too_large), 
-                            Toast.LENGTH_LONG).show()
+                    // Show appropriate success feedback
+                    val successMessage = if (messageBytes.size > MESSAGE_SIZE_LIMIT) {
+                        getString(R.string.detail_send_error_too_large)
                     } else {
-                        Toast.makeText(this@DetailActivity, 
-                            getString(R.string.detail_send_success), 
-                            Toast.LENGTH_SHORT).show()
+                        getString(R.string.detail_send_success)
                     }
+                    Toast.makeText(this@DetailActivity, successMessage, 
+                        if (messageBytes.size > MESSAGE_SIZE_LIMIT) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                // Handle various error types with appropriate user feedback
                 val errorMessage = when (e) {
                     is ApiService.UnauthorizedException -> {
                         if (e.user != null) {
@@ -1052,7 +1072,7 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
                 }
                 
                 runOnUiThread {
-                    // Re-enable input
+                    // Re-enable input controls on error
                     sendButton.isEnabled = true  
                     messageInput.isEnabled = true
                     
@@ -1060,6 +1080,27 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
                 }
             }
         }
+    }
+
+    /**
+     * Reset the message input UI to its initial state after sending a message
+     */
+    private fun resetMessageInput() {
+        // Clear text input
+        messageInput.text?.clear()
+        
+        // Remove attachment
+        selectedAttachmentUri = null
+        attachmentInfo.visibility = View.GONE
+        
+        // Reset markdown mode
+        isMarkdownMode = false
+        markdownToggleButton.isSelected = false
+        markdownPreview.visibility = View.GONE
+        
+        // Re-enable input controls
+        sendButton.isEnabled = true
+        messageInput.isEnabled = true
     }
 
     companion object {
