@@ -106,6 +106,31 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Notification ID Input -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/detail_notification_id_layout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            app:hintEnabled="true"
+            android:hint="@string/detail_send_notification_id_hint"
+            app:helperText="@string/detail_send_notification_id_helper"
+            app:helperTextEnabled="true"
+            app:layout_constraintStart_toEndOf="@+id/detail_priority_layout"
+            app:layout_constraintEnd_toStartOf="@+id/detail_attach_file_button"
+            app:layout_constraintTop_toTopOf="@+id/detail_priority_layout">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/detail_notification_id_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text|textNoSuggestions"
+                android:maxLines="1"
+                android:textSize="14sp" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- Attachment Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/detail_attach_file_button"

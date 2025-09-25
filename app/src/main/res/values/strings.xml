@@ -177,6 +177,8 @@
 
     <!-- Detail send message strings -->
     <string name="detail_send_priority_hint">Priority</string>
+    <string name="detail_send_notification_id_hint">ID (optional)</string>
+    <string name="detail_send_notification_id_helper">Replace notification with same ID</string>
     <string name="detail_send_message_hint">Type your message…</string>
     <string name="detail_send_button_desc">Send message</string>
     <string name="detail_send_attach_file">Attach file</string>

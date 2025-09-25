@@ -77,6 +77,8 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
     private lateinit var messageInputContainer: View
     private lateinit var priorityLayout: TextInputLayout
     private lateinit var priorityText: AutoCompleteTextView
+    private lateinit var notificationIdLayout: TextInputLayout
+    private lateinit var notificationIdInput: TextInputEditText
     private lateinit var attachFileButton: MaterialButton
     private lateinit var markdownToggleButton: MaterialButton
     private lateinit var messageInputLayout: TextInputLayout
@@ -441,7 +443,7 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
                 val tags = possibleTags.shuffled().take(Random.nextInt(0, 4))
                 val title = if (Random.nextBoolean()) getString(R.string.detail_test_title) else ""
                 val message = getString(R.string.detail_test_message, priority)
-                api.publish(subscriptionBaseUrl, subscriptionTopic, user, message, title, priority, tags, delay = "")
+                api.publish(subscriptionBaseUrl, subscriptionTopic, user, message, title, priority, tags, delay = "", notificationId = "")
             } catch (e: Exception) {
                 runOnUiThread {
                     val message = if (e is ApiService.UnauthorizedException) {
@@ -811,6 +813,8 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
         messageInputContainer = findViewById(R.id.detail_message_input_container)
         priorityLayout = findViewById(R.id.detail_priority_layout)
         priorityText = findViewById(R.id.detail_priority_text)
+        notificationIdLayout = findViewById(R.id.detail_notification_id_layout)
+        notificationIdInput = findViewById(R.id.detail_notification_id_input)
         attachFileButton = findViewById(R.id.detail_attach_file_button)
         markdownToggleButton = findViewById(R.id.detail_markdown_toggle_button)
         messageInputLayout = findViewById(R.id.detail_message_input_layout)
@@ -1037,7 +1041,8 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
                     tags = emptyList(), // No tag input in current implementation  
                     delay = "",
                     body = body,
-                    filename = filename
+                    filename = filename,
+                    notificationId = notificationIdInput.text?.toString()?.trim() ?: ""
                 )
 
                 runOnUiThread {
@@ -1086,8 +1091,9 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
      * Reset the message input UI to its initial state after sending a message
      */
     private fun resetMessageInput() {
-        // Clear text input
+        // Clear text inputs
         messageInput.text?.clear()
+        notificationIdInput.text?.clear()
         
         // Remove attachment
         selectedAttachmentUri = null

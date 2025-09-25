@@ -283,6 +283,7 @@ class ShareActivity : AppCompatActivity() {
                     message = message,
                     body = body, // May be null
                     filename = filename, // May be empty
+                    notificationId = "" // No notification ID input in ShareActivity
                 )
                 runOnUiThread {
                     repository.addLastShareTopic(topicUrl(baseUrl, topic))
