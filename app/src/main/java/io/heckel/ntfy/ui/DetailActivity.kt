@@ -77,8 +77,10 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
     private lateinit var messageInputContainer: View
     private lateinit var priorityLayout: TextInputLayout
     private lateinit var priorityText: AutoCompleteTextView
-    private lateinit var notificationIdLayout: TextInputLayout
-    private lateinit var notificationIdInput: TextInputEditText
+    private lateinit var titleInputLayout: TextInputLayout
+    private lateinit var titleInput: TextInputEditText
+    private lateinit var tagsInputLayout: TextInputLayout
+    private lateinit var tagsInput: TextInputEditText
     private lateinit var attachFileButton: MaterialButton
     private lateinit var markdownToggleButton: MaterialButton
     private lateinit var messageInputLayout: TextInputLayout
@@ -94,6 +96,7 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
     private var selectedPriority: Int = PRIORITY_DEFAULT
     private var selectedAttachmentUri: Uri? = null
     private var isMarkdownMode: Boolean = false
+    private var selectedTags: MutableList<String> = mutableListOf()
 
     // Action mode stuff
     private var actionMode: ActionMode? = null
@@ -443,7 +446,7 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
                 val tags = possibleTags.shuffled().take(Random.nextInt(0, 4))
                 val title = if (Random.nextBoolean()) getString(R.string.detail_test_title) else ""
                 val message = getString(R.string.detail_test_message, priority)
-                api.publish(subscriptionBaseUrl, subscriptionTopic, user, message, title, priority, tags, delay = "", notificationId = "")
+                api.publish(subscriptionBaseUrl, subscriptionTopic, user, message, title, priority, tags, delay = "")
             } catch (e: Exception) {
                 runOnUiThread {
                     val message = if (e is ApiService.UnauthorizedException) {
@@ -813,8 +816,10 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
         messageInputContainer = findViewById(R.id.detail_message_input_container)
         priorityLayout = findViewById(R.id.detail_priority_layout)
         priorityText = findViewById(R.id.detail_priority_text)
-        notificationIdLayout = findViewById(R.id.detail_notification_id_layout)
-        notificationIdInput = findViewById(R.id.detail_notification_id_input)
+        titleInputLayout = findViewById(R.id.detail_title_input_layout)
+        titleInput = findViewById(R.id.detail_title_input)
+        tagsInputLayout = findViewById(R.id.detail_tags_input_layout)
+        tagsInput = findViewById(R.id.detail_tags_input)
         attachFileButton = findViewById(R.id.detail_attach_file_button)
         markdownToggleButton = findViewById(R.id.detail_markdown_toggle_button)
         messageInputLayout = findViewById(R.id.detail_message_input_layout)
@@ -834,6 +839,10 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
         markdownToggleButton.setOnClickListener { onMarkdownToggleClick() }
         sendButton.setOnClickListener { onSendMessageClick() }
         attachmentRemoveButton.setOnClickListener { onRemoveAttachmentClick() }
+        
+        // Setup tags picker
+        tagsInputLayout.setEndIconOnClickListener { onTagsPickerClick() }
+        tagsInput.setOnClickListener { onTagsPickerClick() }
         
         // Setup IME action for send
         messageInput.setOnEditorActionListener { _, actionId, _ ->
@@ -1030,19 +1039,27 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
                     }
                 }
 
+                // Get title and tags from input fields
+                val title = titleInput.text?.toString()?.trim() ?: ""
+                val tagsText = tagsInput.text?.toString()?.trim() ?: ""
+                val tags = if (tagsText.isNotEmpty()) {
+                    tagsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                } else {
+                    emptyList()
+                }
+
                 // Publish message using ntfy API
                 api.publish(
                     baseUrl = subscriptionBaseUrl,
                     topic = subscriptionTopic,
                     user = user,
                     message = actualMessage,
-                    title = "", // No title input in current implementation
+                    title = title,
                     priority = selectedPriority,
-                    tags = emptyList(), // No tag input in current implementation  
+                    tags = tags,
                     delay = "",
                     body = body,
-                    filename = filename,
-                    notificationId = notificationIdInput.text?.toString()?.trim() ?: ""
+                    filename = filename
                 )
 
                 runOnUiThread {
@@ -1092,8 +1109,10 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
      */
     private fun resetMessageInput() {
         // Clear text inputs
+        titleInput.text?.clear()
+        tagsInput.text?.clear()
         messageInput.text?.clear()
-        notificationIdInput.text?.clear()
+        selectedTags.clear()
         
         // Remove attachment
         selectedAttachmentUri = null
@@ -1107,6 +1126,80 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
         // Re-enable input controls
         sendButton.isEnabled = true
         messageInput.isEnabled = true
+    }
+
+    /**
+     * Show tags picker dialog with common tags and custom input
+     */
+    private fun onTagsPickerClick() {
+        // Common ntfy emoji and text tags for demonstration
+        val commonTags = listOf(
+            "warning" to "⚠️",
+            "fire" to "🔥",
+            "success" to "✅",
+            "error" to "❌",
+            "info" to "ℹ️",
+            "urgent" to "🚨",
+            "skull" to "💀",
+            "backup" to "💾",
+            "computer" to "💻",
+            "mobile" to "📱",
+            "email" to "📧",
+            "lock" to "🔒",
+            "key" to "🔑",
+            "home" to "🏠",
+            "work" to "🏢",
+            "construction" to "🚧",
+            "checkmark" to "✓",
+            "x" to "✗",
+            "thumbs_up" to "👍",
+            "thumbs_down" to "👎"
+        )
+
+        // Create a simple list dialog showing tag names and their emoji representations
+        val tagItems = commonTags.map { "${it.first} ${it.second}" }.toTypedArray()
+        
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.detail_send_tags_dialog_title))
+            .setItems(tagItems) { _, which ->
+                val selectedTag = commonTags[which].first
+                // Add to existing tags
+                val currentTags = tagsInput.text?.toString()?.trim() ?: ""
+                val updatedTags = if (currentTags.isEmpty()) {
+                    selectedTag
+                } else {
+                    "$currentTags, $selectedTag"
+                }
+                tagsInput.setText(updatedTags)
+            }
+            .setNeutralButton("Custom Tags") { _, _ ->
+                showCustomTagsDialog()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+    
+    /**
+     * Show custom tags input dialog
+     */
+    private fun showCustomTagsDialog() {
+        val input = TextInputEditText(this)
+        input.setText(tagsInput.text)
+        input.hint = getString(R.string.detail_send_tags_custom_hint)
+        
+        val container = LinearLayout(this)
+        container.setPadding(50, 20, 50, 20)
+        container.addView(input)
+        
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.detail_send_tags_dialog_title))
+            .setMessage(getString(R.string.detail_send_tags_dialog_hint))
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                tagsInput.setText(input.text)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     companion object {

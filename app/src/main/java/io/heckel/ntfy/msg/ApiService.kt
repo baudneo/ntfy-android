@@ -41,8 +41,7 @@ class ApiService {
         tags: List<String> = emptyList(),
         delay: String = "",
         body: RequestBody? = null,
-        filename: String = "",
-        notificationId: String = ""
+        filename: String = ""
     ) {
         val url = topicUrl(baseUrl, topic)
         val query = mutableListOf<String>()
@@ -60,9 +59,6 @@ class ApiService {
         }
         if (filename.isNotEmpty()) {
             query.add("filename=${URLEncoder.encode(filename, "UTF-8")}")
-        }
-        if (notificationId.isNotEmpty()) {
-            query.add("id=${URLEncoder.encode(notificationId, "UTF-8")}")
         }
         if (body != null) {
             query.add("message=${URLEncoder.encode(message.replace("\n", "\\n"), "UTF-8")}")
