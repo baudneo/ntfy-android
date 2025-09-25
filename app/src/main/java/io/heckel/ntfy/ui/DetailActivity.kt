@@ -900,7 +900,7 @@ class DetailActivity : AppCompatActivity(), ActionMode.Callback, NotificationFra
      * Handle attachment selection from file picker
      * 
      * Processes the selected file URI and displays file information.
-     * Supports all file types through the generic "*/*" mime type filter.
+     * Supports all file types through the generic wildcard mime type filter.
      */
     private fun onAttachmentSelected(uri: Uri) {
         try {
